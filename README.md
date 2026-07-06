@@ -47,6 +47,10 @@ The LLM never guesses — it routes every question to the right tool, which comp
 | `run_query(pandas_expression)` | Dynamically executes pandas code the agent writes itself, against your real dataframe |
 | `plot_chart(chart_type, column)` | Generates bar, histogram, pie, or line charts on demand |
 
+**Uploads any CSV** 
+
+when you upload a new dataset, the agent automatically generates relevant suggested questions for that specific data. No configuration needed.
+
 ---
 
 ## Tech Stack
