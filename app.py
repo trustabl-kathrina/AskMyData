@@ -183,14 +183,44 @@ if "session_id" not in st.session_state:
         session = await session_service.create_session(app_name="AskMyData", user_id="streamlit_user")
         return session.id
     st.session_state.session_id = asyncio.run(create_session())
-
 # Initialize session state for chat messages history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-st.sidebar.write("Click an example question below to run it:")
+# Define async question generator
+async def generate_example_questions() -> list[str]:
+    user_message = Content(
+        role="user",
+        parts=[Part(text="Based on the dataset schema, suggest exactly 5 short, specific questions a user could ask about this data. Return only a Python list of 5 strings, nothing else, no explanation.")]
+    )
+    
+    response_text = ""
+    async for event in runner.run_async(
+        user_id="streamlit_user",
+        session_id=st.session_state.session_id,
+        new_message=user_message
+    ):
+        if event.message and event.message.parts:
+            text_parts = [p.text for p in event.message.parts if p.text]
+            if text_parts:
+                response_text = "".join(text_parts)
+                
+    cleaned = response_text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    
+    import ast
+    parsed = ast.literal_eval(cleaned)
+    if isinstance(parsed, list) and len(parsed) == 5 and all(isinstance(x, str) for x in parsed):
+        return parsed
+    raise ValueError("Failed to parse valid list of 5 strings")
 
-example_questions = [
+DEFAULT_QUESTIONS = [
     "Which movie has the highest budget?",
     "What is the average rating?",
     "What is the most common genre?",
@@ -198,8 +228,24 @@ example_questions = [
     "Show me a histogram of ratings"
 ]
 
+# Check if dataset path has changed to regenerate questions
+if "active_path" not in st.session_state or st.session_state.active_path != agent_module.CURRENT_CSV_PATH or "example_questions" not in st.session_state:
+    st.session_state.active_path = agent_module.CURRENT_CSV_PATH
+    try:
+        st.session_state.example_questions = asyncio.run(generate_example_questions())
+        st.session_state.is_dynamic = True
+    except Exception as e:
+        st.session_state.example_questions = DEFAULT_QUESTIONS
+        st.session_state.is_dynamic = False
+
+# Render sidebar question buttons
+if st.session_state.get("is_dynamic", False):
+    st.sidebar.caption("Suggested for this dataset")
+else:
+    st.sidebar.write("Click an example question below to run it:")
+
 clicked_question = None
-for question in example_questions:
+for question in st.session_state.example_questions:
     if st.sidebar.button(question):
         clicked_question = question
 
