@@ -8,13 +8,19 @@ from google.adk.agents.llm_agent import Agent
 
 # Load the file tmdb_5000_movies.csv from the project root into a pandas dataframe called df
 CURRENT_CSV_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tmdb_5000_movies.csv"))
-df = pd.read_csv(CURRENT_CSV_PATH)
+try:
+    df = pd.read_csv(CURRENT_CSV_PATH)
+except FileNotFoundError:
+    df = pd.DataFrame()
 
 def set_dataset_path(new_path: str):
     """Updates the dataset path and reloads the global dataframe df."""
     global CURRENT_CSV_PATH, df
     CURRENT_CSV_PATH = new_path
-    df = pd.read_csv(new_path)
+    try:
+        df = pd.read_csv(new_path)
+    except FileNotFoundError:
+        df = pd.DataFrame()
 
 def get_schema() -> str:
     """Returns the column names of df and the first 3 rows as a sample."""
