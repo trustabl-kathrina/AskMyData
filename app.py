@@ -147,20 +147,29 @@ st.markdown(
 num_rows = f"{agent_module.df.shape[0]:,}"
 num_cols = f"{agent_module.df.shape[1]:,}"
 
-file_size_bytes = os.path.getsize(agent_module.CURRENT_CSV_PATH)
+try:
+    file_size_bytes = os.path.getsize(agent_module.CURRENT_CSV_PATH)
+except (FileNotFoundError, OSError):
+    file_size_bytes = 0
+
 if file_size_bytes >= 1024 * 1024:
     file_size_str = f"{file_size_bytes / (1024 * 1024):.2f} MB"
-else:
+elif file_size_bytes > 0:
     file_size_str = f"{file_size_bytes / 1024:.2f} KB"
+else:
+    file_size_str = "0 KB (File not found)"
 
-# Render metric cards
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(label="Rows", value=num_rows)
-with col2:
-    st.metric(label="Columns", value=num_cols)
-with col3:
-    st.metric(label="File Size", value=file_size_str)
+# Render metric cards or prompt user to upload a dataset
+if agent_module.df.empty:
+    st.info("👆 Upload a CSV file from the sidebar to get started. No dataset loaded yet.")
+else:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="Rows", value=num_rows)
+    with col2:
+        st.metric(label="Columns", value=num_cols)
+    with col3:
+        st.metric(label="File Size", value=file_size_str)
 
 st.markdown("---")
 
