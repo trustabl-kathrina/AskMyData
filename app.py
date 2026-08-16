@@ -138,10 +138,16 @@ else:
     active_dataset_name = "tmdb_5000_movies.csv (default)"
 
 # Display currently active dataset status line using styled HTML
-st.markdown(
-    f"<div class='dataset-status'>Currently analyzing: <span>{active_dataset_name}</span></div>",
-    unsafe_allow_html=True
-)
+if uploaded_file is not None:
+    st.markdown(
+        f"<div class='dataset-status'>Currently analyzing: <span>{uploaded_file.name}</span></div>",
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        "<div class='dataset-status'><span>No dataset loaded</span></div>",
+        unsafe_allow_html=True
+    )
 
 # Calculate metrics from the loaded dataframe and file
 num_rows = f"{agent_module.df.shape[0]:,}"
@@ -248,15 +254,18 @@ if "active_path" not in st.session_state or st.session_state.active_path != agen
         st.session_state.is_dynamic = False
 
 # Render sidebar question buttons
-if st.session_state.get("is_dynamic", False):
-    st.sidebar.caption("Suggested for this dataset")
-else:
-    st.sidebar.write("Click an example question below to run it:")
-
 clicked_question = None
-for question in st.session_state.example_questions:
-    if st.sidebar.button(question):
-        clicked_question = question
+if uploaded_file is None:
+    st.sidebar.write("Upload a CSV file above to see suggested questions for your dataset.")
+else:
+    if st.session_state.get("is_dynamic", False):
+        st.sidebar.caption("Suggested for this dataset")
+    else:
+        st.sidebar.write("Click an example question below to run it:")
+
+    for question in st.session_state.example_questions:
+        if st.sidebar.button(question):
+            clicked_question = question
 
 # Render chat history
 for msg in st.session_state.messages:
