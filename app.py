@@ -202,38 +202,60 @@ if "session_id" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Define async question generator
-async def generate_example_questions() -> list[str]:
-    user_message = Content(
-        role="user",
-        parts=[Part(text="Based on the dataset schema, suggest exactly 5 short, specific questions a user could ask about this data. Return only a Python list of 5 strings, nothing else, no explanation.")]
-    )
+# Define local question generator based on column types
+def generate_example_questions() -> list[str]:
+    """Generates up to 5 example questions locally based on the dataframe's column types."""
+    import pandas as pd
+    if agent_module.df.empty:
+        return []
     
-    response_text = ""
-    async for event in runner.run_async(
-        user_id="streamlit_user",
-        session_id=st.session_state.session_id,
-        new_message=user_message
-    ):
-        if event.message and event.message.parts:
-            text_parts = [p.text for p in event.message.parts if p.text]
-            if text_parts:
-                response_text = "".join(text_parts)
+    questions = []
+    # Identify columns, ignoring ID and index columns
+    ignore_keywords = {'id', 'index', 'unnamed'}
+    valid_cols = []
+    for col in agent_module.df.columns:
+        if not any(kw in col.lower() for kw in ignore_keywords):
+            valid_cols.append(col)
+            
+    # Classify columns and construct questions
+    for col in valid_cols:
+        col_type = agent_module.df[col].dtype
+        
+        # Check for date column (either datetime dtype, or column name contains date/year)
+        if pd.api.types.is_datetime64_any_dtype(agent_module.df[col]) or "date" in col.lower() or "year" in col.lower():
+            questions.append(f"How many records are there per year?")
+        # Check for numeric column
+        elif pd.api.types.is_numeric_dtype(agent_module.df[col]):
+            questions.append(f"What is the average {col}?")
+            questions.append(f"Which row has the highest {col}?")
+        # Check for text/object column
+        else:
+            questions.append(f"What is the most common {col}?")
+            questions.append(f"How many unique {col} values are there?")
+            
+        # Stop early if we have enough raw questions to choose from
+        if len(questions) >= 15:
+            break
+            
+    # Deduplicate questions while preserving order
+    seen = set()
+    deduped_questions = []
+    for q in questions:
+        if q not in seen:
+            seen.add(q)
+            deduped_questions.append(q)
+            if len(deduped_questions) == 5:
+                break
                 
-    cleaned = response_text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
-    
-    import ast
-    parsed = ast.literal_eval(cleaned)
-    if isinstance(parsed, list) and len(parsed) == 5 and all(isinstance(x, str) for x in parsed):
-        return parsed
-    raise ValueError("Failed to parse valid list of 5 strings")
+    # Fallback to defaults if we didn't generate enough questions
+    if len(deduped_questions) < 5:
+        default_idx = 0
+        while len(deduped_questions) < 5 and default_idx < len(DEFAULT_QUESTIONS):
+            if DEFAULT_QUESTIONS[default_idx] not in seen:
+                deduped_questions.append(DEFAULT_QUESTIONS[default_idx])
+            default_idx += 1
+            
+    return deduped_questions[:5]
 
 DEFAULT_QUESTIONS = [
     "Which movie has the highest budget?",
@@ -247,7 +269,7 @@ DEFAULT_QUESTIONS = [
 if "active_path" not in st.session_state or st.session_state.active_path != agent_module.CURRENT_CSV_PATH or "example_questions" not in st.session_state:
     st.session_state.active_path = agent_module.CURRENT_CSV_PATH
     try:
-        st.session_state.example_questions = asyncio.run(generate_example_questions())
+        st.session_state.example_questions = generate_example_questions()
         st.session_state.is_dynamic = True
     except Exception as e:
         st.session_state.example_questions = DEFAULT_QUESTIONS
